@@ -1,0 +1,41 @@
+# Config variant: real MAPNA P2 pump fault-detection data, instead of
+# the synthetic AI4I stand-in. Same agent code, same loop - only the
+# plugin names/params below change. Run with:
+#   python demo/run_demo.py config/agent_config_mapna_p2.yaml
+
+data_source:
+  name: mapna_multisensor
+  params:
+    data_dir: "data/datasets/mapna_p2_train"
+    file_suffix: "_train.csv"
+    label_columns: ["faulted"]
+    already_aligned: false
+    tolerance: "5s"
+
+feature_extractor:
+  name: mapna_sensor_columns
+  params:
+    sensor_columns: ["Temperature_C", "Pressure_kPa", "VibAccel_m_s2", "VibVelocity_mm_s"]
+
+model:
+  name: rf_failure_classifier
+  params:
+    n_estimators: 300
+    positive_label: "faulted"
+
+decision_policy:
+  name: threshold_policy
+  params:
+    low: 0.3
+    high: 0.7
+
+action_handlers:
+  - name: console_alert
+    params: {}
+
+training:
+  n_training_rows: 999999   # unused when full_data() is available, kept for interface compatibility
+  target_column: "faulted"
+
+demo:
+  n_batch_rows: 15

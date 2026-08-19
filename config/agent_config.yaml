@@ -1,0 +1,49 @@
+# Single control point for which plugins the agent runs.
+# To try a new idea: register a new plugin class, add its name below.
+# No other code changes needed.
+
+# --- MAPNA P2: real pump fault detection (normal vs faulted) ---
+data_source:
+  name: mapna_multisensor
+  params:
+    data_dir: "data/datasets/mapna_p2_train"
+    file_suffix: "_train.csv"
+    label_columns: ["faulted"]
+    already_aligned: false
+    tolerance: "12s"
+  # Previous stand-in (synthetic AI4I milling-machine data), kept as a
+  # reference for how easy the swap back is:
+  # name: synthetic_ai4i
+  # params: {}
+
+feature_extractor:
+  name: mapna_sensor_columns
+  params:
+    sensor_columns: ["Temperature_C", "Pressure_kPa", "VibAccel_m_s2", "VibVelocity_mm_s"]
+
+model:
+  name: rf_failure_classifier
+  params:
+    n_estimators: 300
+    positive_label: "faulted"
+
+decision_policy:
+  name: threshold_policy
+  params:
+    low: 0.3
+    high: 0.7
+
+action_handlers:
+  - name: console_alert
+    params: {}
+  # Add more in parallel, e.g.:
+  # - name: log_file
+  #   params:
+  #     path: "agent_decisions.log"
+
+training:
+  n_training_rows: 3000
+  target_column: "faulted"
+
+demo:
+  n_batch_rows: 15
