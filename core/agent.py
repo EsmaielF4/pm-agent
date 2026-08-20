@@ -70,7 +70,13 @@ class PredictiveMaintenanceAgent:
             decisions.append(decision_)
 
         return raw, predictions, decisions
-
+    def predict_batch(self, raw: pd.DataFrame):
+        """Run the trained model on a batch of raw rows and return the
+        raw predictions - no decision/alerting logic, just model output.
+        Used for generating a submission-style predictions file, where
+        you want a plain answer per row rather than live agent alerts."""
+        X = self.feature_extractor.transform(raw)
+        return self.model.predict(X)
     def status(self):
         return {
             "active_plugins": {
