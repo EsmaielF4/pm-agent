@@ -17,9 +17,14 @@ data_source:
   # params: {}
 
 feature_extractor:
-  name: mapna_sensor_columns
+  name: mapna_sensor_columns_rolling
   params:
     sensor_columns: ["Temperature_C", "Pressure_kPa", "VibAccel_m_s2", "VibVelocity_mm_s"]
+    window: 5
+  # Previous simpler version (raw sensor values only, no trend):
+  # name: mapna_sensor_columns
+  # params:
+  #   sensor_columns: ["Temperature_C", "Pressure_kPa", "VibAccel_m_s2", "VibVelocity_mm_s"]
 
 model:
   name: rf_failure_classifier
