@@ -1,0 +1,53 @@
+# --- MAPNA P4: fault type + fault source diagnosis (multi-label) ---
+# All rows in this dataset are already-faulty equipment; the task is
+# diagnosing WHAT kind of fault and WHETHER it's the equipment or a
+# sensor at fault - not "will it fail" like P2.
+
+data_source:
+  name: mapna_multisensor
+  params:
+    data_dir: "data/datasets/mapna/P4/Train"
+    file_suffix: "_train.csv"
+    label_columns: ["fault_type", "fault_source"]
+    already_aligned: false
+    tolerance: "16s"
+
+feature_extractor:
+  name: mapna_sensor_columns_rolling
+  params:
+    sensor_columns:
+      - "BearingTemp_C"
+      - "FlowRate_L_min"
+      - "Humidity_pct"
+      - "OilLevel_cm"
+      - "Power_kW"
+      - "Pressure_kPa"
+      - "Speed_RPM"
+      - "Temperature_C"
+      - "Torque_Nm"
+      - "VibAccel_m_s2"
+      - "VibDisp_mm"
+      - "VibVelocity_mm_s"
+      - "Voltage_V"
+      - "pH_units"
+    window: 5
+
+model:
+  name: fault_diagnosis_classifier
+  params:
+    n_estimators: 300
+
+decision_policy:
+  name: fault_routing_policy
+  params:
+    min_confidence: 0.5
+
+action_handlers:
+  - name: console_alert
+    params: {}
+
+training:
+  target_column: ["fault_type", "fault_source"]
+
+demo:
+  n_batch_rows: 15

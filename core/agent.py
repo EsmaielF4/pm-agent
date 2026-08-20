@@ -17,8 +17,10 @@ from data import multisensor  # noqa: F401
 from features import engineering  # noqa: F401
 from features import mapna_features  # noqa: F401
 from models import failure_classifier  # noqa: F401
+from models import fault_diagnosis  # noqa: F401
 from actions import alerting  # noqa: F401
 from core import decision  # noqa: F401
+from core import fault_decision  # noqa: F401
 
 
 class PredictiveMaintenanceAgent:
@@ -49,9 +51,13 @@ class PredictiveMaintenanceAgent:
             raw = self.data_source.full_data()
         else:
             raw = self.data_source.get_batch(self.cfg["training"]["n_training_rows"])
-        raw = raw.dropna(subset=[target_col])
+        # target_column may be a single column name (e.g. P2's "faulted")
+        # or a list of column names (e.g. P4's ["fault_type", "fault_source"]) -
+        # both are supported without any other change to this method.
+        target_cols = target_col if isinstance(target_col, list) else [target_col]
+        raw = raw.dropna(subset=target_cols)
         X = self.feature_extractor.transform(raw)
-        y = raw[target_col]
+        y = raw[target_cols[0]] if len(target_cols) == 1 else raw[target_cols]
         self.model.fit(X, y)
         return raw, X, y
 
