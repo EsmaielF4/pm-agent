@@ -1,0 +1,53 @@
+# --- MAPNA P3: turbine Remaining Useful Life (RUL) regression ---
+# Pre-aligned data (no timestamp - see data/multisensor.py's
+# "prealigned" mode). Deliberately NO rolling features here - see the
+# note at the top of models/rul_regressor.py for why.
+
+data_source:
+  name: mapna_multisensor
+  params:
+    data_dir: "data/datasets/mapna/P3/train"
+    file_suffix: "_train.csv"
+    label_columns: ["RUL_seconds"]
+    already_aligned: true
+
+feature_extractor:
+  name: mapna_sensor_columns
+  params:
+    sensor_columns:
+      - "BearingTemp_C"
+      - "Current_A"
+      - "FlowRate_L_min"
+      - "Humidity_pct"
+      - "OilLevel_cm"
+      - "Power_kW"
+      - "Pressure_kPa"
+      - "Speed_RPM"
+      - "Temperature_C"
+      - "Torque_Nm"
+      - "VibAccel_m_s2"
+      - "VibDisp_mm"
+      - "VibVelocity_mm_s"
+      - "Voltage_V"
+      - "pH_units"
+
+model:
+  name: rul_regressor
+  params:
+    n_estimators: 300
+
+decision_policy:
+  name: rul_maintenance_policy
+  params:
+    critical_seconds: 250
+    warning_seconds: 400
+
+action_handlers:
+  - name: console_alert
+    params: {}
+
+training:
+  target_column: "RUL_seconds"
+
+demo:
+  n_batch_rows: 15

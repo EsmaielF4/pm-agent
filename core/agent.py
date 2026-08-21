@@ -18,9 +18,11 @@ from features import engineering  # noqa: F401
 from features import mapna_features  # noqa: F401
 from models import failure_classifier  # noqa: F401
 from models import fault_diagnosis  # noqa: F401
+from models import rul_regressor  # noqa: F401
 from actions import alerting  # noqa: F401
 from core import decision  # noqa: F401
 from core import fault_decision  # noqa: F401
+from core import rul_decision  # noqa: F401
 
 
 class PredictiveMaintenanceAgent:
