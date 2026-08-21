@@ -1,154 +1,122 @@
-# Predictive Maintenance Agent — Architecture-First Prototype
-
-## What this is
+# Predictive Maintenance Agent
 
 A failure-prediction **agent**, not just a model. The distinction matters:
-a model outputs a probability; an agent perceives, predicts, decides, and
-acts. This project is built so accuracy is the least important number in
-it — the point is a loop and a plugin system you can keep extending for
-four weeks (and beyond) without rewriting anything.
+a model outputs a probability or a number; an agent perceives, predicts,
+decides, and acts. This project proves that one architecture can handle
+genuinely different predictive-maintenance task types — binary failure
+detection, multi-label fault diagnosis, and remaining-useful-life
+regression — by swapping plugins, not rewriting code.
+
+Built on real industrial sensor data from MAPNA's rotary-equipment
+predictive-maintenance competition (pumps, turbines, compressors).
 
 ## The loop
 
-```
 Perceive → Predict → Decide → Act
- (data)    (models)  (agent)   (output)
-```
+(data) (models) (agent) (output)
+
 
 Every stage is an interface (`base.py` in each folder) with one or more
 registered implementations (`core/registry.py`). The `Agent`
-(`core/agent.py`) only ever reads `config/agent_config.yaml` and asks the
-registry for whatever's named there. It never imports a concrete class
-directly.
+(`core/agent.py`) only ever reads a config YAML file and asks the
+registry for whatever plugin is named there — it never imports a
+concrete class directly. Adding a new capability means writing one new
+class and adding one config line, not touching existing code.
 
-```
+## Project structure
+
 pm_agent/
-├── config/agent_config.yaml   <- single control point: which plugins run
+├── config/
+│ ├── agent_config.yaml <- P2: pump fault detection (main config)
+│ ├── agent_config_p3.yaml <- P3: turbine RUL regression
+│ └── agent_config_p4.yaml <- P4: fault type/source diagnosis
 ├── core/
-│   ├── registry.py            <- plugin registration mechanism
-│   ├── agent.py                <- orchestrator, runs the loop
-│   └── decision.py            <- Decide stage (the actual "agent" reasoning)
+│ ├── registry.py <- plugin registration mechanism
+│ ├── agent.py <- orchestrator, runs the loop
+│ ├── decision.py <- P2's threshold-based decision policy
+│ ├── fault_decision.py <- P4's fault-routing decision policy
+│ └── rul_decision.py <- P3's RUL-based decision policy
 ├── data/
-│   ├── base.py                <- DataSource interface
-│   └── sources.py             <- synthetic AI4I generator + CSV loader
+│ ├── base.py <- DataSource interface
+│ ├── sources.py <- synthetic AI4I generator (early reference)
+│ └── multisensor.py <- real MAPNA multi-rate sensor loader
 ├── features/
-│   ├── base.py                <- FeatureExtractor interface
-│   └── engineering.py
+│ ├── base.py <- FeatureExtractor interface
+│ ├── engineering.py <- AI4I feature set (early reference)
+│ └── mapna_features.py <- MAPNA feature sets (raw + rolling)
 ├── models/
-│   ├── base.py                <- Predictor interface
-│   └── failure_classifier.py  <- baseline Random Forest
+│ ├── base.py <- Predictor interface
+│ ├── failure_classifier.py <- P2: binary fault classifier
+│ ├── fault_diagnosis.py <- P4: multi-label fault diagnosis
+│ └── rul_regressor.py <- P3: RUL regressor
 ├── actions/
-│   ├── base.py                <- ActionHandler interface
-│   └── alerting.py            <- console + log-file handlers
-└── demo/run_demo.py           <- trains + runs one live cycle
-```
+│ ├── base.py <- ActionHandler interface
+│ └── alerting.py <- console + log-file handlers (used by all 3)
+└── demo/
+├── run_demo.py <- runs P2
+├── run_demo_p3.py <- runs P3
+├── run_demo_p4.py <- runs P4
+└── generate_predictions.py <- generates real submission predictions (P2)
+
 
 ## Run it
 
-```
-cd pm_agent
 pip install -r requirements.txt
-python demo/run_demo.py
-```
+python demo/run_demo.py # P2: pump fault detection
+python demo/run_demo_p3.py # P3: turbine RUL regression
+python demo/run_demo_p4.py # P4: fault type/source diagnosis
 
-## How to add a new idea (the whole point of this architecture)
 
-Say you want to add a Remaining-Useful-Life estimator instead of just a
-yes/no failure flag:
+## Results (real MAPNA data, honestly evaluated)
 
-1. Create `models/rul_estimator.py`, subclass `Predictor`, implement
+| Problem | Task | Metric | Score |
+|---|---|---|---|
+| **P2** | Pump fault detection (binary) | 5-fold CV Macro-F1 | **0.968** |
+| **P3** | Turbine remaining useful life (regression) | 5-fold CV R² | **0.55** (MAE ≈ 37s) |
+| **P4** | Fault type + source diagnosis (multi-label) | Avg of two Macro-F1 (MAPNA's own metric) | **0.658** |
+
+A few honest notes on these numbers:
+- P2's score comes from **rolling trend features** (moving mean/std over
+  the last 5 readings per sensor) — raw instantaneous readings alone
+  scored 0.898; the trend mattered more than the instant value.
+- P3's R² is moderate, not high, and that's a property of the data, not
+  an under-built model: consecutive `RUL_seconds` values in the raw
+  data jump up almost as often as they jump down, meaning it behaves
+  more like noisy independent samples than a clean countdown.
+- P4 does well on the three common fault types but struggles on
+  `sensor_fault` (54 of 2,250 rows) — a real, expected limit of a rare
+  class with little training data.
+
+## How to add a new idea
+
+Say you want to add an anomaly detector (MAPNA's P5) that needs no
+labels at all:
+
+1. Create `models/anomaly_detector.py`, subclass `Predictor`, implement
    `fit`/`predict`/`name`, decorate with
-   `@register("model", "rul_estimator")`.
+   `@register("model", "anomaly_detector")`.
 2. Import the file once in `core/agent.py`'s plugin-import block.
-3. Either swap `model.name` in the config to `rul_estimator`, or (better)
-   extend `Agent` to run multiple models per cycle and let
-   `DecisionPolicy` read both outputs — the interfaces don't stop you
-   running several predictors side by side.
+3. Write a `config/agent_config_p5.yaml` pointing at the P5 data, with
+   `model.name: anomaly_detector`.
+4. Optionally add a matching `DecisionPolicy` if the routing logic
+   should differ from the existing ones.
 
-Same pattern for a new data source (real sensor feed from equipment
-you've worked with), a smarter decision policy (e.g. factoring in time
-until the next scheduled maintenance window), or a new action (email,
-dashboard, ticketing system). **No existing file needs to change**, only
-new files + one config line.
+No existing file needs to change — this is the same pattern that took
+P2 (binary classification) to P4 (multi-label classification) to P3
+(regression) without ever touching `core/agent.py`'s core loop logic
+(only its plugin-import list and one line generalizing `target_column`
+to accept either a single column or a list).
 
-## Update: now running on real MAPNA rotary-equipment data
+## Design rationale (for your write-up / pitch)
 
-Switched from the synthetic AI4I (milling-machine/cutting-tool) stand-in
-to a real dataset from a separate MAPNA competition, covering **pumps,
-turbines, and compressors** — a much closer match to Iran's actual
-predictive-maintenance use case than cutting tools.
-
-**What's different about this data, architecturally:** sensors live in
-separate CSV files sampled at different rates (1s–15s), so before any
-feature/model work happens, readings have to be synchronized onto a
-common timeline. That's a new `DataSource` plugin
-(`data/multisensor.py`, `mapna_multisensor`) using `pandas.merge_asof`
-to align slower sensors onto the label-carrying sensor's timestamps —
-everything downstream (feature extractor, model, decision policy,
-action handlers) is unchanged, because the interface contract didn't
-change, only the plugin.
-
-The MAPNA competition itself is structured as **five sub-problems on
-the same kind of sensor data** — which maps cleanly onto this
-architecture as five Predictor plugins sharing one data layer:
-
-| Problem | Task | Status |
-|---|---|---|
-| P2 — pump fault detection | binary classification (`faulted`/`normal`) | **done** — 90.1% acc, 0.899 Macro-F1 on real data |
-| P3 — turbine remaining useful life | regression (`RUL_seconds`) | next — reuses `mapna_multisensor` with `already_aligned: true` |
-| P4 — fault type + source diagnosis | multi-output classification | next — two classifiers sharing the sensor feature set |
-| P5 — anomaly detection | unsupervised, no labels | next — new `Predictor` plugin (e.g. Isolation Forest), same data layer |
-| P1 — fixed statistical calculations | deterministic stats script, not really ML | low priority — one-off script, not part of the agent |
-
-Config for the working P2 pipeline: `config/agent_config_mapna_p2.yaml`.
-Run it with:
-```
-python demo/run_demo.py agent_config_mapna_p2.yaml
-```
-
-## Current plugins (running on real MAPNA rotary-equipment data)
-
-- **Data**: `mapna_multisensor` (`data/multisensor.py`) — loads real
-  pump sensor data from MAPNA's rotary-equipment competition (problem
-  P2: fault detection). Handles the core real-world wrinkle this data
-  has: each sensor (Temperature, Pressure, VibAccel, VibVelocity) is
-  sampled at a different rate (1s/2s/5s/10s) in its own CSV, and the
-  label lives only in the slowest sensor's file. This class
-  timestamp-aligns everything via `merge_asof` onto the label sensor's
-  timeline. It also supports the "pre-aligned" MAPNA layout (P3/P5,
-  same row count across files, no timestamp) via `already_aligned:
-  true`. The earlier synthetic AI4I generator (`data/sources.py`,
-  `synthetic_ai4i`) is kept as a fallback/reference — swapping between
-  them is a config change only.
-- **Features**: `mapna_sensor_columns` — the 4 raw aligned sensor
-  values, NaN-handled (forward/back-fill then median impute, since
-  gaps are expected both from the asof-merge and from the raw data
-  itself per MAPNA's own documentation).
-- **Model**: Random Forest classifier, now label-agnostic (works with
-  string classes like `"faulted"/"normal"`, not just 0/1) via a
-  `positive_label` config param — needed because scikit-learn's
-  `predict_proba` column order follows sorted class names, not which
-  one means "bad".
-- **Decision policy**: simple probability thresholds (low/medium/high →
-  monitor / flag / schedule maintenance). Still the layer to extend
-  first — domain judgment plugs in here without retraining anything.
-- **Action**: console alert + optional log file.
-- **Result**: Macro-F1 ≈ 0.90 on a held-out slice of the real pump
-  data — well above the competition's own 0.5 minimum-score threshold,
-  with zero hyperparameter tuning.
-
-## The MAPNA dataset (5 sub-problems, all sharing the same plugin slots)
-
-| Problem | Task | Equipment | Sensors | Type | Status |
-|---|---|---|---|---|---|
-| P2 | Fault detection (normal/faulted) | pump | 4 | Binary classification | **wired up, working** |
-| P3 | Remaining Useful Life | turbine | 15 | Regression | data staged, model TODO |
-| P4 | Fault type + fault source | rotary equip. | 14 | Multi-label classification | data staged, model TODO |
-| P5 | Anomaly detection | rotary equip. | 15 | Unsupervised, no labels | data staged, model TODO |
-
-Each of P3–P5 uses `mapna_multisensor` too (P3/P5 are the
-"pre-aligned" layout — set `already_aligned: true`); only a new
-`Predictor` plugin (a regressor for P3, a multi-label classifier for
-P4, an anomaly detector for P5) is needed to bring each online — this
-is the concrete proof that the "expandable" requirement holds in
-practice, not just on paper.
+The reason this is built as a plugin-registry agent rather than three
+separate notebooks: predictive maintenance problems vary enormously by
+equipment type, available sensors, and failure modes — sometimes you
+want "will it fail" (P2), sometimes "what's wrong and who fixes it"
+(P4), sometimes "how much time is left" (P3). A founder who can only
+ship one hardcoded model has a narrow product. A founder who can plug
+in a new equipment profile, a new task type, or a new decision rule in
+an afternoon has a platform. This repository's commit history — three
+genuinely different ML task types added as clean, incremental branches
+on one unchanged core loop — is the actual evidence for that claim, not
+just the argument for it.
