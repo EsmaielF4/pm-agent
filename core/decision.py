@@ -14,6 +14,16 @@ from core.registry import register
 
 
 class DecisionPolicy(ABC):
+    def calibrate(self, predictions: list, labels) -> None:
+        """Optional hook: called once after training with the model's own
+        predictions and true labels on the training set, so a policy can
+        learn data-derived thresholds instead of using fixed numbers.
+        No-op by default - existing policies (threshold_policy,
+        fault_routing_policy, rul_maintenance_policy) don't need this and
+        are unaffected. Safe to call unconditionally regardless of what
+        `predictions` looks like for a given Predictor."""
+        pass
+
     @abstractmethod
     def decide(self, row: dict, prediction: dict) -> dict:
         """row: original raw/feature data for this item (dict).

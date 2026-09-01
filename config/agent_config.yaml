@@ -33,10 +33,17 @@ model:
     positive_label: "faulted"
 
 decision_policy:
-  name: threshold_policy
+  name: adaptive_baseline_policy
   params:
-    low: 0.3
-    high: 0.7
+    z_medium: 2.0
+    z_high: 3.5
+    trend_window: 5
+    trend_escalate_slope: 0.08
+  # Previous fixed-threshold version, kept for comparison:
+  # name: threshold_policy
+  # params:
+  #   low: 0.3
+  #   high: 0.7
 
 action_handlers:
   - name: console_alert
