@@ -20,7 +20,8 @@ from models import failure_classifier  # noqa: F401
 from models import fault_diagnosis  # noqa: F401
 from models import rul_regressor  # noqa: F401
 from actions import alerting  # noqa: F401
-from core import decision  # noqa: F401
+from core import rul_decision  # noqa: F401
+from core import adaptive_decision  # noqa: F401
 from core import fault_decision  # noqa: F401
 from core import rul_decision  # noqa: F401
 
@@ -61,6 +62,10 @@ class PredictiveMaintenanceAgent:
         X = self.feature_extractor.transform(raw)
         y = raw[target_cols[0]] if len(target_cols) == 1 else raw[target_cols]
         self.model.fit(X, y)
+        # Let the decision policy learn data-derived thresholds from the
+        # model's own training-set predictions, if it supports that
+        # (no-op for policies that don't - see DecisionPolicy.calibrate).
+        self.decision_policy.calibrate(self.model.predict(X), y)
         return raw, X, y
 
     def run_cycle(self, n: int = None):
