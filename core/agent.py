@@ -19,6 +19,7 @@ from features import mapna_features  # noqa: F401
 from models import failure_classifier  # noqa: F401
 from models import fault_diagnosis  # noqa: F401
 from models import rul_regressor  # noqa: F401
+from models import boosting_classifiers  # noqa: F401
 from actions import alerting  # noqa: F401
 from core import rul_decision  # noqa: F401
 from core import adaptive_decision  # noqa: F401

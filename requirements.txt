@@ -4,3 +4,6 @@ scikit-learn
 pyyaml
 streamlit
 matplotlib
+xgboost
+lightgbm
+shap
